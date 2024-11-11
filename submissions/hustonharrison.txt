@@ -1,0 +1,155 @@
+#####QUERY1#####
+	with q1 as (
+		select cust, min(quant) min_q, max(quant) max_q, avg(quant) avg_q 
+		from sales 
+		group by cust
+	),
+	q2 as (
+		select q1.cust, q1.min_q, s.prod min_prod, s.date min_date, s.state min_st, q1.max_q, q1.avg_q
+		from q1, sales s
+		where q1.cust = s.cust and q1.min_q = s.quant
+	),
+	q3 as (
+		select q2.cust, q2.min_q, q2.min_prod, q2.min_date, q2.min_st, q2.max_q, 
+				s.prod max_prod, s.date max_date, s.state max_st, q2.avg_q
+		from q2, sales s
+		where q2.cust = s.cust and q2.max_q = s.quant
+	)
+	select * from q3 order by cust
+
+#####QUERY2#####
+
+	with day_quants as (
+		select year, month, day, sum(quant) day_total
+		from sales
+		group by year, month, day
+	),
+	max_days as (
+		select year, month, max(day_total) busiest_total_q, min(day_total) slowest_total_q
+		from day_quants
+		group by year, month
+	),
+	busiest as (
+		select year, month, day busiest_day, busiest_total_q
+		from day_quants natural join max_days
+		where max_days.busiest_total_q = day_quants.day_total
+	),
+	slowest as (
+		select year, month, day slowest_day, slowest_total_q
+		from day_quants natural join max_days
+		where max_days.slowest_total_q = day_quants.day_total
+	)
+	select year, month, busiest_day, busiest_total_q, slowest_day, slowest_total_q
+	from busiest natural join slowest
+	order by year, month
+
+#####QUERY3#####
+
+	with q1 as (
+		select cust, prod, sum(quant) prod_total 
+		from sales
+		group by cust, prod
+	),
+	q2 as (
+		select cust, max(prod_total) most_fav_count, min(prod_total) least_fav_count
+		from q1
+		group by cust
+	),
+	q3 as (
+		select q2.cust, q1.prod most_fav_food
+		from q2, q1
+		where q2.most_fav_count = prod_total and q2.cust = q1.cust
+	),
+	q4 as (
+		select q2.cust, q3.most_fav_food, q1.prod least_fav_food
+		from q3, q2, q1
+		where q2.least_fav_count = prod_total and q3.cust = q1.cust
+	)
+	select * from q4 order by cust
+
+#####QUERY4#####
+
+	with month_data as (
+		select cust, prod, month, avg(quant) mo_average, sum(quant) month_total, count(quant) as mo_count
+		from sales
+		group by cust, prod, month
+		order by cust, prod, month
+	),
+	spring as (
+		select cust, prod, round(avg(mo_average), 0) SPRING_AVG
+		from month_data
+		where month = 3 or month = 4 or month = 5
+		group by cust, prod
+	),
+	summer as (
+		select cust, prod, round(avg(mo_average), 0) SUMMER_AVG
+		from month_data
+		where month = 6 or month = 7 or month = 8
+		group by cust, prod
+	),
+	fall as (
+		select cust, prod, round(avg(mo_average), 0) FALL_AVG
+		from month_data
+		where month = 9 or month = 10 or month = 11
+		group by cust, prod
+	),
+	winter as (
+		select cust, prod, round(avg(mo_average), 0) WINTER_AVG
+		from month_data
+		where month = 12 or month = 1 or month = 2
+		group by cust, prod
+	)
+	select distinct cust CUSTOMER, prod PRODUCT, SPRING_AVG, SUMMER_AVG, FALL_AVG, WINTER_AVG, sum(month_total) TOTAL, sum(mo_count) COUNT
+	from spring natural join summer natural join fall natural join winter natural join month_data
+	group by cust, prod, SPRING_AVG, SUMMER_AVG, FALL_AVG, WINTER_AVG
+
+#####QUERY5#####
+
+	with month_data as (
+		select prod, month, max(quant) max_quant
+		from sales
+		group by prod, month
+	),
+	q1 as (
+		select temp.prod, temp.Q1_MAX, sales.date Q1_DATE
+		from sales, (
+			select month_data.prod, max(month_data.max_quant) Q1_MAX
+			from month_data
+			where month in (1,2,3)
+			group by month_data.prod
+			) temp
+		where sales.prod = temp.prod and sales.quant = temp.Q1_MAX and sales.month in (1,2,3)
+	),
+	q2 as (
+		select temp.prod, temp.Q2_MAX, sales.date Q2_DATE
+		from sales, (
+			select month_data.prod, max(month_data.max_quant) Q2_MAX
+			from month_data
+			where month in (4,5,6)
+			group by month_data.prod
+			) temp
+		where sales.prod = temp.prod and sales.quant = temp.Q2_MAX and sales.month in (4,5,6)
+	),
+	q3 as (
+		select temp.prod, temp.Q3_MAX, sales.date Q3_DATE
+		from sales, (
+			select month_data.prod, max(month_data.max_quant) Q3_MAX
+			from month_data
+			where month in (7,8,9)
+			group by month_data.prod
+			) temp
+		where sales.prod = temp.prod and sales.quant = temp.Q3_MAX and sales.month in (7,8,9)
+	),
+	q4 as (
+		select temp.prod, temp.Q4_MAX, sales.date Q4_DATE
+		from sales, (
+			select month_data.prod, max(month_data.max_quant) Q4_MAX
+			from month_data
+			where month in (10,11,12)
+			group by month_data.prod
+			) temp
+		where sales.prod = temp.prod and sales.quant = temp.Q4_MAX and sales.month in (10,11,12)
+	)
+	select prod PRODUCT, Q1_MAX, Q1_DATE, Q2_MAX, Q2_DATE, Q3_MAX, Q3_DATE, Q4_MAX, Q4_DATE
+	from q1 natural join q2 natural join q3 natural join q4
+	order by prod

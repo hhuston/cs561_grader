@@ -1,0 +1,198 @@
+#####QUERY1#####
+with q1 as
+(
+Select cust Customer, max(quant) Max_Q, min(quant) Min_Q, avg(quant) Avg_Q
+From sales
+Group by cust
+), q2 as
+(
+Select Customer, Max_Q, prod Max_Prod, date Max_Date, state ST, Min_Q, Avg_Q
+From q1, sales
+Where q1.Customer = sales.cust and q1.Max_Q = sales.quant
+), q3 as
+(
+Select Customer, Max_Q, Max_Prod, Max_date, ST, Min_Q, prod Min_Prod, date Min_Date,
+state ST, Avg_Q
+From q2, sales
+Where q2.Customer = sales.cust and q2.Min_Q = sales.quant
+)
+Select *
+From q3
+Order by Customer, Max_Prod, Min_Prod
+#####QUERY2#####
+with q1 as
+(
+Select year, month, sum(quant) Total_Q
+From sales
+Group by year, month
+), q2 as
+(
+Select q1.year, max(Total_Q) Busiest_Total_Q
+From sales, q1
+Group by q1.year
+), q3 as
+(
+Select q1.year, q1.month Busiest_Month, Busiest_Total_Q
+From q1, q2
+Where q1.Total_Q = q2.Busiest_Total_Q and q1.year = q2.year
+), q4 as
+(
+Select q1.year, min(Total_Q) Slowest_Total_Q
+From sales, q1
+Group by q1.year
+), q5 as
+(
+Select q1.year, q1.month Slowest_Month, Slowest_Total_Q
+From q1, q4
+Where q1.Total_Q = q4.Slowest_Total_Q and q1.year = q4.year
+), q6 as
+(
+Select q3.year, Busiest_Month, Busiest_Total_Q, Slowest_Month, Slowest_Total_Q
+From q3, q5
+Where q3.year = q5.year
+)
+Select *
+From q6
+Order by year
+#####QUERY3#####
+with q1 as
+(
+Select prod Product, month, sum(quant) Total_Q_Month
+From sales
+Group by Product, month
+), q2 as
+(
+Select Product, max(Total_Q_Month) Max_Q, min(Total_Q_Month) Min_Q
+From q1
+Group by Product
+), q3 as
+(
+Select q1.Product, month Most_Pop_Month
+From q1, q2
+Where q1.Product = q2.Product and q1.Total_Q_Month = Max_Q
+), q4 as
+(
+Select q1.Product, month Least_Pop_Month
+From q1, q2
+Where q1.Product = q2.Product and q1.Total_Q_Month = Min_Q
+), q5 as
+(
+Select q3.Product, Most_Pop_Month, Least_Pop_Month
+From q3, q4
+Where q3.Product = q4.Product
+)
+Select *
+From q5
+Order by Product
+#####QUERY4#####
+with q1 as
+(
+Select cust Customer, prod Product, avg(quant) Spring_Avg
+From sales
+Where month = 3 or month = 4 or month = 5
+Group by Customer, Product
+), q2 as
+(
+Select cust Customer, prod Product, avg(quant) Summer_Avg
+From sales
+Where month = 6 or month = 7 or month = 8
+Group by Customer, Product
+), q3 as
+(
+Select cust Customer, prod Product, avg(quant) Fall_Avg
+From sales
+Where month = 9 or month = 10 or month = 11
+Group by Customer, Product
+), q4 as
+(
+Select cust Customer, prod Product, avg(quant) Winter_Avg
+From sales
+Where month = 12 or month = 1 or month = 2
+Group by Customer, Product
+), q5 as
+(
+Select cust Customer, prod Product, sum(quant) Total_Q
+From sales
+Group by Customer, Product
+), q6 as
+(
+Select cust Customer, prod Product, count(quant) Transactions
+From sales
+Group by Customer, Product
+), q7 as
+(
+Select cust Customer, prod Product, avg(quant) Average
+From sales
+Group by Customer, Product
+), q8 as
+(
+Select q1.Customer, q1.Product, Spring_Avg, Summer_Avg, Fall_Avg, Winter_Avg, Average,
+Total_Q, Transactions
+From q1, q2, q3, q4, q5, q6, q7
+Where q1.Customer = q2.Customer and q1.Customer = q3.Customer and q1.Customer =
+q4.Customer and q1.Customer = q5.Customer and q1.Customer = q6.Customer and q1.Customer
+= q7.Customer and q1.Product = q2.Product and q1.Product = q3.Product and q1.Product =
+q4.Product and q1.Product = q5.Product and q1.Product = q6.Product and q1.Product =
+q7.Product
+)
+Select *
+From q8
+Order by Customer, Product
+#####QUERY5#####
+with q1 as
+(
+Select prod Product, max(quant) Q1_Max
+From sales
+Where month = 1 or month = 2 or month = 3
+Group by Product
+), q2 as
+(
+Select prod Product, max(quant) Q2_Max
+From sales
+Where month = 4 or month = 5 or month = 6
+Group by Product
+), q3 as
+(
+Select prod Product, max(quant) Q3_Max
+From sales
+Where month = 7 or month = 8 or month = 9
+Group by Product
+), q4 as
+(
+Select prod Product, max(quant) Q4_Max
+From sales
+Where month = 10 or month = 11 or month = 12
+Group by Product
+), q5 as
+(
+Select prod Product, Q1_Max, date
+From sales, q1
+Where q1.Q1_Max = sales.quant and q1.Product = sales.prod and (month = 1 or month = 2 or
+month = 3)
+), q6 as
+(
+Select prod Product, Q2_Max, date
+From sales, q2
+Where q2.Q2_Max = sales.quant and q2.Product = sales.prod and (month = 4 or month = 5 or
+month = 6)
+), q7 as
+(
+Select prod Product, Q3_Max, date
+From sales, q3
+Where q3.Q3_Max = sales.quant and q3.Product = sales.prod and (month = 7 or month = 8 or
+month = 9)
+), q8 as
+(
+Select cust Customer, prod Product, Q4_Max, date
+From sales, q4
+Where q4.Q4_Max = sales.quant and q4.Product = sales.prod and (month = 10 or month = 11 or
+month = 12)
+), q9 as
+(
+Select q5.Product, Q1_Max, q5.date, Q2_Max, q6.date, Q3_Max, q7.date, Q4_Max, q8.date
+From q5, q6, q7, q8
+Where q5.Product = q6.Product and q5.Product = q7.Product and q5.Product = q8.Product
+)
+Select *
+From q9
+Order by Product
