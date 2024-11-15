@@ -1,3 +1,4 @@
+NAME: Harrison Huston
 #####QUERY1#####
 	with q1 as (
 		select cust, min(quant) min_q, max(quant) max_q, avg(quant) avg_q 
