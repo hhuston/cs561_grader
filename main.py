@@ -7,11 +7,13 @@ from dotenv import dotenv_values
 PRINT_WIDTH = 12
 
 # Connect to PostgreSQL
+print("Connecting to PostgreAdmin...")
 config = dotenv_values(".env")
 conn = psycopg2.connect(database=config['DBNAME'], user=config['USER'], password=config['PASSWORD'], host=config["HOST"])
 cur = conn.cursor()
 
 # Get the answer key
+print("Running answer key queries...")
 key = {}
 with open("key.txt", "r") as f:
     lines = f.readlines()
@@ -28,10 +30,18 @@ for q in queries:
     }
     count += 1
 
-os.makedirs("results")
+# Create / Clear results dir
+print("Preparing results directory...")
+try:
+    os.mkdir("results")
+except FileExistsError:
+    for file in os.scandir("results"):
+        os.remove(file.path)
 
 # Check Student Answers
-for submission in os.scandir("submissions"):
+print("Checking Student Submissions...")
+submissions = os.scandir("submissions")
+for submission in submissions:
     print(submission.path)
     with open(submission.path, "r") as f:
         lines = f.readlines()
@@ -48,7 +58,9 @@ for submission in os.scandir("submissions"):
         expected = key[f"Query_{count}"]
         
         cur.execute(q)
-
+        cols = [desc.name for desc in cur.description]
+        print(cols)
+        exit()
         header = ""
         for col in expected["columns"]:   
             header += f"|{col:>{PRINT_WIDTH}}"
@@ -78,6 +90,6 @@ for submission in os.scandir("submissions"):
             f.writelines(rows)
         count += 1
     
-
+submissions.close()
 cur.close()
 conn.close()   
