@@ -1,0 +1,19 @@
+#####QUERY1#####
+
+<DELETE ME - Paste sql code here>
+
+#####QUERY2#####
+
+<DELETE ME - Paste sql code here>
+
+#####QUERY3#####
+
+<DELETE ME - Paste sql code here>
+
+#####QUERY4#####
+
+<DELETE ME - Paste sql code here>
+
+#####QUERY5#####
+
+<DELETE ME - Paste sql code here>
