@@ -1,34 +1,28 @@
 from decimal import Decimal
 import re
 import os
-import psycopg2
 from dotenv import dotenv_values
+from postgre import pg, Table
 
-PRINT_WIDTH = 12
+RED    = "\033[31m"  
+YELLOW = "\033[33m"
+GREEN  = "\033[32m"
+RESET  = "\033[0m"
 
 # Connect to PostgreSQL
 print("Connecting to PostgreAdmin...")
-config = dotenv_values(".env")
-conn = psycopg2.connect(database=config['DBNAME'], user=config['USER'], password=config['PASSWORD'], host=config["HOST"])
-cur = conn.cursor()
+pg = pg(dotenv_values(".env"))
 
 # Get the answer key
 print("Running answer key queries...")
-key = {}
+key : dict[Table] = {}
 with open("key.txt", "r") as f:
     lines = f.readlines()
 lines = " ".join(list(map(lambda x: x.strip(), lines)))
 queries = re.split("\s*#+QUERY[1-5]#+\s+", lines)[1:]
 
-count = 1
-for q in queries:
-    cur.execute(q)
-    columns = ["Correct?"] + [column.name for column in cur.description]
-    key[f"Query_{count}"] =  {
-        "columns": columns,
-        "rows": [record for record in cur],
-    }
-    count += 1
+for count in range(len(queries)):
+    key[f"Query_{count + 1}"] =  pg.runQuery(queries[count])
 
 # Create / Clear results dir
 print("Preparing results directory...")
@@ -38,58 +32,84 @@ except FileExistsError:
     for file in os.scandir("results"):
         os.remove(file.path)
 
+errorTracker = [0, 0, 0]
 # Check Student Answers
 print("Checking Student Submissions...")
 submissions = os.scandir("submissions")
 for submission in submissions:
-    print(submission.path)
     with open(submission.path, "r") as f:
         lines = f.readlines()
-        
     lines = " ".join(list(map(lambda x: x.strip(), lines)))
     queries = re.split("\s*#+QUERY[1-5]#+\s+", lines)
     name, queries = queries[0], queries[1:]
 
-    with open(submission.path.replace("submissions", "results"), "w") as f:
-            f.write(name)
+    f = open(submission.path.replace("submissions", "results"), "w", encoding="utf-8")
+    f.write(name + "\n")
 
-    count = 1
-    for q in queries:
-        expected = key[f"Query_{count}"]
         
-        cur.execute(q)
-        cols = [desc.name for desc in cur.description]
-        print(cols)
-        exit()
-        header = ""
-        for col in expected["columns"]:   
-            header += f"|{col:>{PRINT_WIDTH}}"
-        header += "\n"
+    # Integer to represent the level of mistakes in the query
+    # 0 -> No errors
+    # 1 -> Potential issues, but could be full credit (i.e. incorrect column names)
+    # 2 -> Indisbutible mistakes in the query output
+    errorLevel = 0
 
-        i = 0
-        rows = []
-        for record in cur:
-            correct = f"|{chr(10003):>{PRINT_WIDTH}}"
-            row = f"|{1:>{PRINT_WIDTH}}"
-            if len(record) != len(expected["rows"][i]):
-                header = ["Incorrect number of columns in output\n"]
-                break
-            for j in range(len(expected["rows"][i])):
-                if record[j] != expected["rows"][i][j]:
-                    correct = f"|{'X':>{PRINT_WIDTH}}"
-                val = record[j]
-                if isinstance(record[j], Decimal):
-                    val = round(record[j], 2)
-                row += f"|{str(val):>{PRINT_WIDTH}}"
-            i += 1
-            rows += [correct + row + "\n"]
+    # Run the student queries
+    for count in range(len(queries)):
+        f.write(f"#####Query {count + 1}#####\n")
+        
+        expected : Table = key[f"Query_{count + 1}"]
+        result : Table = pg.runQuery(queries[count])
 
-        with open(submission.path.replace("submissions", "results"), "a") as f:
-            f.write(f"Query_{count}\n")
-            f.writelines(header)
-            f.writelines(rows)
-        count += 1
+        # Checking column headers
+        colStr = ""
+        if len(result["columns"]) < len(expected["columns"]):
+            colStr += "X: Missing columns\n"
+            errorLevel = 2
+        if len(result["columns"]) > len(expected["columns"]):
+            colStr += "X: Extra columns\n"
+            errorLevel = 2
+        else:
+            for col in result["columns"]:
+                if col not in expected["columns"]:
+                    colStr += "X: Incorrect column header(s) - Manual Checking Required\n"
+                    errorLevel = 1 if errorLevel <= 1 else errorLevel
+                    break
+        colStr += f"{chr(10003)}: Correct column headers" + "\n" if colStr == "" else ""
+        f.write(f"Columns:\n{colStr}\n")
+        
+        # Checking rows
+        rRows = result["rows"]
+        eRows = expected["rows"]
+
+        rowStr = ""
+        if len(rRows) < len(eRows):
+            rowStr += "X: Missing rows\n"
+            errorLevel = 2
+        if len(rRows) > len(eRows):
+            rowStr += "X: Extra rows\n"
+            errorLevel = 2
+        else:
+            for i in range(len(rRows)):
+                if rRows[i] != eRows[i]:
+                    if rRows[i] in eRows[i]:
+                        rowStr += "X: Incorrect order\n" if "X: Incorrect order\n" not in rowStr else ""
+                        errorLevel = 2
+                    else:
+                        rowStr += "X: Incorrect values\n"
+                        errorLevel = 2
+                        break
+        rowStr += f"{chr(10003)}: Correct rows" + "\n" if rowStr == "" else ""
+        f.write(f"Rows:\n{rowStr}\n")
     
+    colors = [GREEN, YELLOW, RED]
+    print(f"{colors[errorLevel]}{name}{RESET}")
+    errorTracker[errorLevel] += 1
+
+    f.close()
+    
+print("\nSummary:")
+print(f"{GREEN}{errorTracker[0]} students have correct queries{RESET}")
+print(f"{YELLOW}{errorTracker[1]} students need further review{RESET}")
+print(f"{RED}{errorTracker[2]} students have incorrect queries{RESET}")
 submissions.close()
-cur.close()
-conn.close()   
+pg.disconnect()
