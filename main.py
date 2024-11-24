@@ -55,6 +55,7 @@ for submission in submissions:
 
     # Run the student queries
     for count in range(len(queries)):
+        printTables = False
         f.write(f"#####Query {count + 1}#####\n")
         
         expected : Table = key[f"Query_{count + 1}"]
@@ -65,14 +66,17 @@ for submission in submissions:
         if len(result["columns"]) < len(expected["columns"]):
             colStr += "X: Missing columns\n"
             errorLevel = 2
+            printTables = True
         if len(result["columns"]) > len(expected["columns"]):
             colStr += "X: Extra columns\n"
             errorLevel = 2
+            printTables = True
         else:
             for col in result["columns"]:
                 if col not in expected["columns"]:
                     colStr += "X: Incorrect column header(s) - Manual Checking Required\n"
                     errorLevel = 1 if errorLevel <= 1 else errorLevel
+                    printTables = True
                     break
         colStr += f"{chr(10003)}: Correct column headers" + "\n" if colStr == "" else ""
         f.write(f"Columns:\n{colStr}\n")
@@ -94,12 +98,17 @@ for submission in submissions:
                     if rRows[i] in eRows[i]:
                         rowStr += "X: Incorrect order\n" if "X: Incorrect order\n" not in rowStr else ""
                         errorLevel = 2
+                        printTables = True
                     else:
                         rowStr += "X: Incorrect values\n"
                         errorLevel = 2
+                        printTables = True
                         break
         rowStr += f"{chr(10003)}: Correct rows" + "\n" if rowStr == "" else ""
         f.write(f"Rows:\n{rowStr}\n")
+        if printTables:
+            f.write("Expected\n" + pg.formatTable(expected) + "\n")
+            f.write("Result\n" + pg.formatTable(result) + "\n")
     
     colors = [GREEN, YELLOW, RED]
     print(f"{colors[errorLevel]}{name}{RESET}")
