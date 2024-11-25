@@ -39,7 +39,7 @@ submissions = os.scandir("submissions")
 for submission in submissions:
     with open(submission.path, "r") as f:
         lines = f.readlines()
-    lines = " ".join(list(map(lambda x: x.strip(), lines)))
+    lines = "\n".join(list(map(lambda x: x.strip(), lines)))
     queries = re.split("\s*#+QUERY[1-5]#+\s+", lines)
     name, queries = queries[0], queries[1:]
 
@@ -59,7 +59,13 @@ for submission in submissions:
         f.write(f"#####Query {count + 1}#####\n")
         
         expected : Table = key[f"Query_{count + 1}"]
-        result : Table = pg.runQuery(queries[count])
+        try:
+            result : Table = pg.runQuery(queries[count])
+        except Exception as e:
+            f.write(f"SQL Error: {str(e).strip()}\n")
+            errorLevel = 2
+            pg.rollback()
+            continue
 
         # Checking column headers
         colStr = ""
