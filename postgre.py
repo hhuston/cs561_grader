@@ -26,6 +26,10 @@ class pg():
             "columns": [column.name.upper() for column in self.curr.description],
             "rows": rows,
         }
+    
+    def rollback(self) -> None:
+        self.curr.execute("ROLLBACK")
+        self.conn.commit()
 
     def formatTable(self, table: Table) -> str:
         max_width = 0
