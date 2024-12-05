@@ -1,4 +1,6 @@
-<DELETE ME - YOUR NAME AND CWID>
+NAME: <DELETE ME - Your name here>
+CWID: <DELETE ME - Your CWID here>
+Pledge: I pledge my honor that I have abided by the Stevens Honor System.
 
 #####QUERY1#####
 

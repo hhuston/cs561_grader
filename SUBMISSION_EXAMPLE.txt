@@ -1,0 +1,33 @@
+NAME: Harrison Huston
+CWID: 20006655
+Pledge: I pledge my honor that I have abided by the Stevens Honor System.
+
+#####QUERY1#####
+
+SELECT *
+FROM sales
+WHERE state = 'NJ' 
+
+#####QUERY2#####
+
+SELECT *
+FROM sales
+WHERE state = 'NJ' 
+
+#####QUERY3#####
+
+SELECT *
+FROM sales
+WHERE state = 'NJ' 
+
+#####QUERY4#####
+
+SELECT *
+FROM sales
+WHERE state = 'NJ' 
+
+#####QUERY5#####
+
+SELECT *
+FROM sales
+WHERE state = 'NJ' 
