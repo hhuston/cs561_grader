@@ -44,17 +44,22 @@ class pg():
 
         PRINT_WIDTH = max_width
 
-        tableLength = len(table["columns"])
-        tableStr = ""
+        tableLength = len(table["columns"]) + 1
+        tableStr = f"|{' ':>{PRINT_WIDTH}}"
         for col in table["columns"]:
             tableStr += f"|{col:>{PRINT_WIDTH}}"
         tableStr += f"|\n{'=' * ((PRINT_WIDTH + 1) * tableLength)}\n"
 
+        count = 1
         for row in table["rows"]:
+            tableStr += f"|{str(count):>{PRINT_WIDTH}}"
             for val in row:
                 if isinstance(val, Decimal):
                     val = round(val, 2)
                 tableStr += f"|{str(val):>{PRINT_WIDTH}}"
-            tableStr += f"|\n-{'-' * ((PRINT_WIDTH + 1) * tableLength)}\n"
+            # Swap the commented tableStr if you want lines separating each row in the output
+            # tableStr += f"|\n-{'-' * ((PRINT_WIDTH + 1) * tableLength)}\n"
+            tableStr += f"|\n"
+            count += 1
 
         return tableStr    

@@ -16,7 +16,7 @@ state ST, Avg_Q
 From q2, sales
 Where q2.Customer = sales.cust and q2.Min_Q = sales.quant
 )
-Select *
+Select distinct *
 From q3
 Order by Customer, Max_Prod, Min_Prod
 #####QUERY2#####
@@ -193,6 +193,6 @@ Select q5.Product, Q1_Max, q5.date, Q2_Max, q6.date, Q3_Max, q7.date, Q4_Max, q8
 From q5, q6, q7, q8
 Where q5.Product = q6.Product and q5.Product = q7.Product and q5.Product = q8.Product
 )
-Select *
+Select distinct *
 From q9
 Order by Product

@@ -13,6 +13,14 @@ RESET  = "\033[0m"
 print("Connecting to PostgreAdmin...")
 pg = pg(dotenv_values(".env"))
 
+# Create / Clear results dir
+print("Preparing results directory...")
+try:
+    os.mkdir("results")
+except FileExistsError:
+    for file in os.scandir("results"):
+        os.remove(file.path)
+
 # Get the answer key
 print("Running answer key queries...")
 key : dict[Table] = {}
@@ -21,16 +29,11 @@ with open("key.txt", "r") as f:
 lines = " ".join(list(map(lambda x: x.strip(), lines)))
 queries = re.split("\s*#+QUERY[1-5]#+\s+", lines)[1:]
 
-for count in range(len(queries)):
-    key[f"Query_{count + 1}"] =  pg.runQuery(queries[count])
-
-# Create / Clear results dir
-print("Preparing results directory...")
-try:
-    os.mkdir("results")
-except FileExistsError:
-    for file in os.scandir("results"):
-        os.remove(file.path)
+with open("results/ANSWER_KEY.txt", "w") as f:
+    for count in range(len(queries)):
+        key[f"Query_{count + 1}"] =  pg.runQuery(queries[count])
+        f.write(f"#####Query {count + 1}#####\n")
+        f.write(pg.formatTable(key[f"Query_{count + 1}"]) + "\n")
 
 errorTracker = [0, 0, 0]
 # Check Student Answers
@@ -41,10 +44,12 @@ for submission in submissions:
         lines = f.readlines()
     lines = "\n".join(list(map(lambda x: x.strip(), lines)))
     queries = re.split("\s*#+QUERY[1-5]#+\s+", lines)
-    name, queries = queries[0], queries[1:]
+    header, queries = queries[0], queries[1:]
+    header = [line.strip() for line in header.split("\n")]
+    name = header[0]
 
     f = open(submission.path.replace("submissions", "results"), "w", encoding="utf-8")
-    f.write(name + "\n")
+    f.writelines(header + ["\n"])
 
         
     # Integer to represent the level of mistakes in the query
@@ -69,36 +74,41 @@ for submission in submissions:
 
         # Checking column headers
         colStr = ""
-        if len(result["columns"]) < len(expected["columns"]):
-            colStr += "X: Missing columns\n"
+        colDiff = len(result["columns"]) - len(expected["columns"])
+        if colDiff < 0:
+            colStr += f"X: Missing {colDiff} column{'s' if abs(colDiff) > 1 else ''}\n"
             errorLevel = 2
             printTables = True
-        if len(result["columns"]) > len(expected["columns"]):
-            colStr += "X: Extra columns\n"
+        elif colDiff > 0:
+            colStr += f"X: {colDiff} extra column{'s' if colDiff > 1 else ''}\n"
             errorLevel = 2
             printTables = True
         else:
+            colStr += f"{chr(10003)}: Correct number of columns\n"
+            temp = f"{chr(10003)}: Correct column headers\n"
             for col in result["columns"]:
                 if col not in expected["columns"]:
-                    colStr += "X: Incorrect column header(s) - Manual Checking Required\n"
+                    temp = "X: Incorrect column header(s) - Manual Checking Required\n"
                     errorLevel = 1 if errorLevel <= 1 else errorLevel
                     printTables = True
                     break
-        colStr += f"{chr(10003)}: Correct column headers" + "\n" if colStr == "" else ""
+            colStr += temp
         f.write(f"Columns:\n{colStr}\n")
         
         # Checking rows
         rRows = result["rows"]
         eRows = expected["rows"]
-
         rowStr = ""
-        if len(rRows) < len(eRows):
-            rowStr += "X: Missing rows\n"
+
+        rowDiff = len(rRows) - len(eRows)
+        if rowDiff < 0:
+            rowStr += f"X: Missing {abs(rowDiff)} row{'s' if abs(rowDiff) > 1 else ''}\n"
             errorLevel = 2
-        if len(rRows) > len(eRows):
-            rowStr += "X: Extra rows\n"
+        elif rowDiff > 0:
+            rowStr += f"X: {rowDiff} extra row{'s' if rowDiff > 1 else ''}\n"
             errorLevel = 2
         else:
+            rowStr += f"{chr(10003)}: Correct number of rows\n"
             for i in range(len(rRows)):
                 if rRows[i] != eRows[i]:
                     if rRows[i] in eRows[i]:
@@ -110,10 +120,9 @@ for submission in submissions:
                         errorLevel = 2
                         printTables = True
                         break
-        rowStr += f"{chr(10003)}: Correct rows" + "\n" if rowStr == "" else ""
+        rowStr += f"{chr(10003)}: All rows correct" + "\n" if rowStr == "" else ""
         f.write(f"Rows:\n{rowStr}\n")
         if printTables:
-            f.write("Expected\n" + pg.formatTable(expected) + "\n")
             f.write("Result\n" + pg.formatTable(result) + "\n")
     
     colors = [GREEN, YELLOW, RED]
