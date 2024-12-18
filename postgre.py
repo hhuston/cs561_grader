@@ -21,9 +21,10 @@ class pg():
 
     def runQuery(self, sql: str) -> Table:
         self.curr.execute(sql)
-        rows = [record for record in self.curr]
+        rows = self.curr.fetchall()
+        rows = [[index + 1] + list(rows[index]) for index in range(len(rows))]
         return {
-            "columns": [column.name.upper() for column in self.curr.description],
+            "columns": [''] + [column.name.upper() for column in self.curr.description],
             "rows": rows,
         }
     
@@ -32,34 +33,37 @@ class pg():
         self.conn.commit()
 
     def formatTable(self, table: Table) -> str:
-        max_width = 0
-        for col in table["columns"]:
-            max_width = max(max_width, len(col))
+        PADDING = 2
+
+        numCols = len(table["columns"])
+        numRows = len(table["rows"])
+
+        max_widths = [0 for i in range(numCols)]
+        max_widths[0] = len(str(numRows))
+
+        for col in range(1, numCols):
+            max_widths[col] = max(max_widths[col], len(table["columns"][col]) + PADDING)
 
         for row in table["rows"]:
-            for val in row:
+            for col in range(1, numCols):
+                val = row[col]
                 if isinstance(val, Decimal):
                     val = round(val, 2)
-                max_width = max(max_width, len(str(val)) + 1)
+                max_widths[col] = max(max_widths[col], len(str(val)) + PADDING)
 
-        PRINT_WIDTH = max_width
+        tableStr = ""
+        for col in range(numCols):
+            tableStr += f"|{table['columns'][col]:>{max_widths[col]}}"
+        tableStr += f"|\n{'=' * (sum(max_widths) + numCols + 1)}\n"
 
-        tableLength = len(table["columns"]) + 1
-        tableStr = f"|{' ':>{PRINT_WIDTH}}"
-        for col in table["columns"]:
-            tableStr += f"|{col:>{PRINT_WIDTH}}"
-        tableStr += f"|\n{'=' * ((PRINT_WIDTH + 1) * tableLength)}\n"
-
-        count = 1
         for row in table["rows"]:
-            tableStr += f"|{str(count):>{PRINT_WIDTH}}"
-            for val in row:
+            for col in range(numCols):
+                val = row[col]
                 if isinstance(val, Decimal):
                     val = round(val, 2)
-                tableStr += f"|{str(val):>{PRINT_WIDTH}}"
+                tableStr += f"|{str(val):>{max_widths[col]}}"
             # Swap the commented tableStr if you want lines separating each row in the output
-            # tableStr += f"|\n-{'-' * ((PRINT_WIDTH + 1) * tableLength)}\n"
+            # tableStr += f"|\n-{'-' * ((sum(max_widths) + 1) * numCols)}\n"
             tableStr += f"|\n"
-            count += 1
 
         return tableStr    
