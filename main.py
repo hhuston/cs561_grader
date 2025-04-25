@@ -3,25 +3,21 @@ import re
 import os
 from dotenv import dotenv_values
 from postgre import pg, Table
+from canvasapi import Canvas
+import config
 
-RED    = "\033[31m"  
-YELLOW = "\033[33m"
-GREEN  = "\033[32m"
-RESET  = "\033[0m"
-
-BANNED_KEYWORDS = ["Coalesce", "Limit", "Row_number", "Case", "While"]
 
 # Connect to PostgreSQL
 print("Connecting to PostgreAdmin...")
 pg = pg(dotenv_values(".env"))
 
-# Create / Clear results dir
-print("Preparing results directory...")
-try:
-    os.mkdir("results")
-except FileExistsError:
-    for file in os.scandir("results"):
-        os.remove(file.path)
+# Connect to Canvas
+print("Connecting to Canvas...")
+canvas = Canvas(config.API_URL, config.API_TOKEN)
+course = canvas.get_course(config.COURSE_ID)
+assignment = course.get_assignment(config.ASSIGNMENT_ID)
+
+TEST_STUDENT_ID = 86095
 
 # Get the answer key
 print("Running answer key queries...")
@@ -31,47 +27,38 @@ with open("key.txt", "r") as f:
 lines = " ".join(list(map(lambda x: x.strip(), lines)))
 queries = re.split("\s*#+QUERY[1-5]#+\s+", lines)[1:]
 
-with open("results/ANSWER_KEY.txt", "w") as f:
+print("Writing answer key in ANSWER_KEY.txt...")
+with open("ANSWER_KEY.txt", "w") as f:
     for count in range(len(queries)):
         key[f"Query_{count + 1}"] =  pg.runQuery(queries[count])
         f.write(f"#####Query {count + 1}#####\n")
         f.write(pg.formatTable(key[f"Query_{count + 1}"]) + "\n")
 
-errorTracker = [0, 0, 0]
 # Check Student Answers
 print("Checking Student Submissions...")
-submissions = os.scandir("submissions")
+submissions = assignment.get_submissions()
 for submission in submissions:
-    with open(submission.path, "r") as f:
-        lines = f.readlines()
-    lines = "\n".join(list(map(lambda x: x.strip(), lines)))
+    file = submission.attachments[0]
+    lines = file.get_contents()
     queries = re.split("\s*#+QUERY[1-5]#+\s+", lines)
     header, queries = queries[0], queries[1:]
     header = [line.strip() for line in header.split("\n")]
     name = header[0]
 
-    f = open(submission.path.replace("submissions", "results"), "w", encoding="utf-8")
+    f = open("autograder_generated_comments.txt", "w", encoding="utf-8")
     f.writelines(header + ["\n"])
-
-        
-    # Integer to represent the level of mistakes in the query
-    # 0 -> No errors
-    # 1 -> Potential issues, but could be full credit (i.e. incorrect column names)
-    # 2 -> Indisbutible mistakes in the query output
-    errorLevel = 0
 
     # Run the student queries
     for count in range(len(queries)):
         printTables = False
         f.write(f"#####Query {count + 1}#####\n")
 
-        banned_keyword = False
-        for keyword in BANNED_KEYWORDS:
+        banned_keyword_found = False
+        for keyword in config.BANNED_SQL_KEYWORDS:
             if keyword.lower() in queries[count].lower():
                 f.write(f"X: Banned keyword found - {keyword}\n")
-                errorLevel = 2
-                banned_keyword = True
-        if banned_keyword:
+                banned_keyword_found = True
+        if banned_keyword_found:
             f.write("\n")
             continue
         
@@ -79,8 +66,7 @@ for submission in submissions:
         try:
             result : Table = pg.runQuery(queries[count])
         except Exception as e:
-            f.write(f"SQL Error: {str(e).strip()}\n")
-            errorLevel = 2
+            f.write(f"X: SQL Error - {str(e).strip()}\n")
             pg.rollback()
             continue
 
@@ -89,21 +75,22 @@ for submission in submissions:
         colDiff = len(result["columns"]) - len(expected["columns"])
         if colDiff < 0:
             colStr += f"X: Missing {abs(colDiff)} column{'s' if abs(colDiff) > 1 else ''}\n"
-            errorLevel = 2
             printTables = True
         elif colDiff > 0:
             colStr += f"X: {colDiff} extra column{'s' if colDiff > 1 else ''}\n"
-            errorLevel = 2
             printTables = True
         else:
             colStr += f"{chr(10003)}: Correct number of columns\n"
             temp = f"{chr(10003)}: Correct column headers\n"
             for col in result["columns"]:
-                if col not in expected["columns"]:
-                    temp = "X: Incorrect column header(s) - Manual Checking Required\n"
-                    errorLevel = 1 if errorLevel <= 1 else errorLevel
+                # Gives leeway so that if extra headers were included
+                # it will not be counted as an incorrect header
+                if col not in expected["columns"] and colDiff < 1:
+                    temp = "X: Incorrect column header(s)\n"
                     printTables = True
                     break
+                elif col not in expected["columns"]:
+                    colDiff -= 1
             colStr += temp
         f.write(f"Columns:\n{colStr}\n")
         
@@ -123,8 +110,12 @@ for submission in submissions:
             printTables = True
         else:
             rowStr += f"{chr(10003)}: Correct number of rows\n"
-            for i in range(len(rRows)):
-                if rRows[i] not in eRows:
+            for index, eRow in enumerate(eRows):
+                for col in expected["columns"]:
+                    if eRow[col] != rRows[index][col]:
+                        rowStr += "X: Incorrect values\n"
+                        printTables = True
+                        break
                     # if rRows[i] in eRows[i]:
                     #     rowStr += "X: Incorrect order\n" if "X: Incorrect order\n" not in rowStr else ""
                     #     errorLevel = 2
@@ -138,16 +129,12 @@ for submission in submissions:
         f.write(f"Rows:\n{rowStr}\n")
         if printTables:
             f.write("Result\n" + pg.formatTable(result) + "\n")
-    
-    colors = [GREEN, YELLOW, RED]
-    print(f"{colors[errorLevel]}{name}{RESET}")
-    errorTracker[errorLevel] += 1
 
     f.close()
     
-print("\nSummary:")
-print(f"{GREEN}{errorTracker[0]} students have correct queries{RESET}")
-print(f"{YELLOW}{errorTracker[1]} students need further review{RESET}")
-print(f"{RED}{errorTracker[2]} students have incorrect queries{RESET}")
-submissions.close()
 pg.disconnect()
+os.remove("autograder_generated_comments.txt")
+
+
+# test_student_submission.upload_comment(file="./api_test_comment")
+# test_student_submission.edit(submission={"posted_grade": 100})
